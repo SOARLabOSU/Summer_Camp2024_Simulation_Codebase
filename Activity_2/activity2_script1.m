@@ -84,7 +84,7 @@ end
 
 [x,y,z,roll,pitch,yaw] = viz_conversion_states(x_now,time);
 video=0;
-speed_flag==1;
+speed_flag=1;
 quad_animation(x,y,z,roll,pitch,yaw,xds(1,:),time,speed_flag,video)
 
 hold on
