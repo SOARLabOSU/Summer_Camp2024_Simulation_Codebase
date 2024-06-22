@@ -1,7 +1,8 @@
 close all; clc; clear
 
 addpath function_files
-addpath mex_files_windows_intel
+addpath mex_files_intel_mac
+%addpath mex_files_windows_intel
 
 %% User input for the MPC horizon / future time that the quadrotor brain can see
 while 1
@@ -41,8 +42,9 @@ tsim = 10;
 
 %% Define initial conditions
 % define the initial rotation matrix
+
+
 R0=rotx(20)*roty(5)*rotz(30);
-% R0=eye(3);
 w0=zeros(3,1); % define the initial angular velocities
 x0=[0;0;0]; % initial position
 v0=zeros(3,1); % initial velocity
@@ -123,12 +125,13 @@ disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 pause;
 
 [x,y,z,roll,pitch,yaw] = viz_conversion_states(x_now,time);
-video=0;
-quad_animation(x,y,z,roll,pitch,yaw,xd,video)
+video_flag=0;
+speed_flag=0;
+quad_animation_h(x,y,z,roll,pitch,yaw,xd,x0,time,speed_flag,video_flag)
 
+% thrust_mat = individual_rotor_thrust_compute(u_mpc);
 
-return;
-%% plotting
+%% plotting errors
 % Initialize classical attitude tracking error
 V1=zeros(length(time),1);
 % Initialize  the velocity error matrix
@@ -149,30 +152,8 @@ for jj=1:length(time)
 end
 
 f=figure;
-subplot(2,2,1)
-plot(time,V1,'LineWidth',3)
-grid
-title('Attitude Tracking Error')
-hold on
-xlabel('Time (s)','Interpreter','latex')
-ylabel('$\mathbf{V_1 = tr(I-R_d^TR)}$','Interpreter','latex')
-% ylim([0 4])
-set(gca,'FontSize',20)
-
-subplot(2,2,2)
-plot(time,We,'LineWidth',3)
-title('Angular Velocity Error')
-hold on
-xlabel('Time (s)','Interpreter','latex')
-ylabel('Error','Interpreter','latex')
-legend('\omega_1','\omega_2','\omega_3')
-set(gca,'FontSize',20)
-% ylim([0 0.1])
-grid
-
-subplot(2,2,3)
 plot(time,xe,'LineWidth',3)
-title('Position')
+title('Position Error with time')
 hold on
 xlabel('Time (s)','Interpreter','latex')
 ylabel('Error','Interpreter','latex')
@@ -181,27 +162,5 @@ set(gca,'FontSize',20)
 % ylim([0 0.1])
 grid
 
-subplot(2,2,4)
-plot(time,ve,'LineWidth',3)
-title('Velocity Error')
-hold on
-xlabel('Time (s)','Interpreter','latex')
-ylabel('Error','Interpreter','latex')
-legend('v_1','v_2','v_3')
-set(gca,'FontSize',20)
-% ylim([0 0.1])
-grid
-
 f.Position = [100 100 1200 1000];
 
-%%
-
-figure;
-subplot(1,2,1)
-stairs(time,[u_mpc(:,1);nan],'-.','LineWidth',3)
-title('f')
-xlim([0 10])
-subplot(1,2,2)
-stairs(time(1:end-1),u_mpc(:,2:end),'--','LineWidth',3)
-title('M')
-xlim([0 10])
