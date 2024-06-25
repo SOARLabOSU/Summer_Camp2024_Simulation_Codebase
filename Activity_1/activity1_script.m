@@ -1,20 +1,66 @@
 close all; clc; clear
 
 addpath function_files
-addpath mex_files_intel_mac
-%addpath mex_files_windows_intel
+% addpath mex_files_intel_mac
+addpath mex_files_windows_intel
 
-%% User input for the MPC horizon / future time that the quadrotor brain can see
+disp('%%%%%%%%%%%%%%%%%%%%%%%- Activity 1 - %%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+disp('                           Hover Task                              ')
+disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+disp(' ')
+disp('Press Enter to Proceed')
+disp(' ')
+pause;
 
+%% User input for starting & desired position of the Quadrotor
 xd=zeros(3,1);
+x0 = zeros(3,1);
+
+% take input for starting point
+while 1
+
+    disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    start_ip = input(['Enter 1 if starting at 0 position'...
+                       '\nEnter 2 to set manual starting point \n: ']);
+    if start_ip == 1
+        break;
+    elseif start_ip == 2
+        x0(1) = input('Enter initial x co-ordinate (-4 m to 4 m): ');
+        x0(2) = input('Enter initial y co-ordinate (-4 m to 4 m): ');
+        x0(3) = input('Enter initial z co-ordinate (-4 m to 4 m): ');
+
+        if max(abs(x0)) <=4.1
+            disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            disp('Input Received ! Thank You !')
+            disp('Press Enter to Proceed for Simulation')
+            disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+            break;
+        else
+            disp('    ')
+            disp('*************Invalid input************')
+            disp('    ')
+        end
+    else
+         disp('    ')
+        disp('*************Invalid input************')
+        disp('    ') 
+    end
+
+
+end
+
+
+% take input for the desired point
 
 while 1
 
-    xd(1) = input('Enter desired x co-ordinate (-2 m to 2 m): ');
-    xd(2) = input('Enter desired y co-ordinate (-2 m to 2 m): ');
-    xd(3) = input('Enter desired z co-ordinate (-2 m to 2 m): ');
+    disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-    if max(abs(xd)) <=2.1
+    xd(1) = input('Enter desired x co-ordinate (-4 m to 4 m): ');
+    xd(2) = input('Enter desired y co-ordinate (-4 m to 4 m): ');
+    xd(3) = input('Enter desired z co-ordinate (-4 m to 4 m): ');
+
+    if max(abs(xd)) <=4.1
         disp('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         disp('Input Received ! Thank You !')
         disp('Press Enter to Proceed for Simulation')
@@ -31,69 +77,53 @@ end
 pause;
 
 
-%% Simulation parameters for the brain
-mpc_horizon=4; % length of MPC horizon
+%% Timing parameters for the brain of the quadrotor
+mpc_horizon=4; % length of MPC horizon / time in the future that the brain can forsee
 ctrlDT = 0.1; % time interval between two divisions of MPC horizon
 mpc_div = mpc_horizon/ctrlDT; % # of divisions of the mpc horizon
+
 % time of simulation
 tsim = 10;
 
 %% Define initial conditions
-% define the initial rotation matrix
+X0 = gen_init_condition(x0);
 
-
-R0=rotx(20)*roty(5)*rotz(30);
-w0=zeros(3,1); % define the initial angular velocities
-x0=[0;0;0]; % initial position
-v0=zeros(3,1); % initial velocity
-% initial conditions as a state vector
-x0=[x0' v0' R0(:)' w0'];
-
-%% Define Reference
-
-Rd=eye(3); % Ref rotation matrix
-% xd=[1;1;1]; % ref position
-vd=0*[0.1;0.1;0.1]; % ref velocities
-wd=0*[0.01;0.01;0.01]; % ref angular velocities
-Xd=[xd' vd' Rd(:)' wd']; % as a vector reference
-
+%% Define Reference conditions
+Xd = gen_ref_condition(xd);
 
 
 %% MPC Startup
+
 % initial guess of the decision variables
-input.x=repmat(x0,mpc_div+1,1);
+input.x=repmat(X0,mpc_div+1,1);
 input.u=zeros(mpc_div,4);
 
 % incorporate reference inputs
 input.y=repmat([Xd zeros(1,4)],mpc_div,1);
 input.yN=Xd; % terminal reference input
 
-%% Run Simulation
+%% Run MPC Simulation
 
 iter = 0;
 time=0;
 
 u_mpc = [];
-x_now=x0;
+x_now=X0;
 
-mpc_time = [];
 
 while time(end) < tsim
-    tic;
+    
+    % MPC solve step
     input.x0=x_now(end,:);
-
     output = acado_MPC_solve(input);
-
-
+    % control signal computed
     u_mpc = [u_mpc; output.u(1,:)];
     
     % Shifting of mpc outputs
     input.x = [output.x(2:end,:);output.x(end,:)];
     input.u = [output.u(2:end,:);output.u(end,:)];
-    time_elapsed = toc;
-    mpc_time = [mpc_time; time_elapsed];
     
-    % simulate system
+    % simulate the quadrotor system
     sim_input.x = x_now(end,:)';
     sim_input.u = output.u(1,:)';
     [states out] = integrator_quad(sim_input);
@@ -119,23 +149,13 @@ quad_animation_h(x,y,z,roll,pitch,yaw,xd,x0,time,speed_flag,video_flag)
 % thrust_mat = individual_rotor_thrust_compute(u_mpc);
 
 %% plotting errors
-% Initialize classical attitude tracking error
-V1=zeros(length(time),1);
-% Initialize  the velocity error matrix
-We = zeros(length(time),3);
+
 xe=zeros(length(time),3);
 ve=zeros(length(time),3);
 
 for jj=1:length(time)
-    R=x_now(jj,7:15); % vec:R in time tspan(jj)
-    R=reshape(R,3,3);
-    V1(jj)=trace(eye(3)-Rd'*R); % classical attitude tracking error
-    % wd = 0.001*[sin(0.03*tspan(jj));sin(0.01*tspan(jj));sin(0.02*tspan(jj))];
-    w = x_now(jj,16:18);
-    We(jj,:) = abs(wd-w');
-    x=x_now(jj,1:3); v=x_now(jj,4:6);
+    x=x_now(jj,1:3); 
     xe(jj,:)=abs(xd-x');
-    ve(jj,:)=abs(vd-v');
 end
 
 f=figure;
